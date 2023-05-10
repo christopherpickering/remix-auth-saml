@@ -148,11 +148,3 @@ export const loader = async () => {
   });
 };
 ```
-
-## How to use it
-
-4. In `tests/index.test.ts` change the tests to use your strategy and test it. Inside the tests you have access to `jest-fetch-mock` to mock any fetch you may need to do.
-5. Once you are ready, set the secrets on Github
-   - `NPM_TOKEN`: The token for the npm registry
-   - `GIT_USER_NAME`: The git username you want the bump workflow to use in the commit.
-   - `GIT_USER_EMAIL`: The email you want the bump workflow to use in the commit.
