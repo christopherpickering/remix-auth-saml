@@ -1,0 +1,34 @@
+{
+  "branches": [
+    "+([0-9])?(.{+([0-9]),x}).x",
+    "master",
+    "main",
+    "next",
+    "next-major",
+    { "name": "beta", "prerelease": true },
+    { "name": "alpha", "prerelease": true },
+    { "name": "dev", "prerelease": "rc" }
+  ],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "config": "./node_modules/cz-conventional-changelog"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "publish": "false"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["package.json"]
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}

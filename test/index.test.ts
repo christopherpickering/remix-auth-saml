@@ -1,7 +1,7 @@
-import { createCookieSessionStorage } from "@remix-run/server-runtime";
-import { MyStrategy } from "../src";
+import { createCookieSessionStorage } from "@remix-run/node";
+import { SamlStrategy } from "../src";
 
-describe(MyStrategy, () => {
+describe(SamlStrategy, () => {
   let verify = jest.fn();
   // You will probably need a sessionStorage to test the strategy.
   let sessionStorage = createCookieSessionStorage({
@@ -12,10 +12,16 @@ describe(MyStrategy, () => {
     jest.resetAllMocks();
   });
 
+  const validator = {
+    validate: (response: string) => {
+      return Promise.resolve("skipped");
+    },
+  };
+
   test("should have the name of the strategy", () => {
-    let strategy = new MyStrategy({ something: "You may need" }, verify);
-    expect(strategy.name).toBe("change-me");
+    let strategy = new SamlStrategy({ validator }, verify);
+    expect(strategy.name).toBe("saml");
   });
 
-  test.todo("Write more tests to check everything works as expected");
+  // test.todo("Write more tests to check everything works as expected");
 });
