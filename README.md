@@ -50,7 +50,7 @@ Install a validator as specified in the samlify readme https://github.com/tngan/
 ```ts
 import { Authenticator } from "remix-auth";
 import { sessionStorage } from "~/services/session.server";
-import { SamlStrategy } from "@/lib/SamlAuthStrategy";
+import { SamlStrategy } from "remix-auth-saml";
 
 // install and import an xml validator as directed here: https://github.com/tngan/samlify/tree/master
 import * as validator from "@authenio/samlify-node-xmllint";
