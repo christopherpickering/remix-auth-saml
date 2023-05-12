@@ -183,10 +183,6 @@ export class SamlStrategy<User> extends Strategy<
         extract,
         data: body,
       });
-
-      debug("User authenticated");
-
-      return await this.success(user, request, sessionStorage, options);
     } catch (error) {
       debug("Failed to login user", error);
       if (error instanceof Error) {
@@ -215,6 +211,10 @@ export class SamlStrategy<User> extends Strategy<
         new Error(JSON.stringify(error, null, 2))
       );
     }
+
+    debug("User authenticated");
+
+    return await this.success(user, request, sessionStorage, options);
   }
 
   private async getAuthorizationURL(request: Request) {
@@ -225,9 +225,16 @@ export class SamlStrategy<User> extends Strategy<
       this.authorizationParams(new URL(context).searchParams)
     );
 
+    let requestParams = new URLSearchParams(
+      this.authorizationParams(new URL(request.url).searchParams)
+    );
+
     params.set(
       "RelayState",
-      this.getCallbackURL(new URL(request.url)).toString()
+      requestParams.get("returnTo") ||
+        requestParams.get("relayState") ||
+        requestParams.get("redirect_url") ||
+        this.getCallbackURL(new URL(request.url)).toString()
     );
 
     let url = new URL(context);

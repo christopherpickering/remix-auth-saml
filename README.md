@@ -78,46 +78,43 @@ authenticator.use(samlStrategy);
 
 ### `routes/auth.saml.tsx`
 
-The current url is saved to a cookie when a user accesses a protected page without being logged in.
-They will run through the saml process and then be redirected to the same page.
-
-See https://sergiodxa.com/articles/add-returnto-behavior-to-remix-auth for more information about how this works.
-
 ```ts
-import type { ActionArgs, LoaderArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { authenticator } from "~/services/auth.server";
-import { returnToCookie } from "~/services/cookies.server";
 
 export let action: ActionFunction = ({ request }) => login(request);
 export let loader: LoaderFunction = ({ request }) => login(request);
 
 async function login(request: Request) {
-  let url = new URL(request.url);
-  let returnTo = url.searchParams.get("returnTo") as string | null;
-
-  try {
-    return await authenticator.authenticate("saml", request, {
-      successRedirect: returnTo ?? "/",
-      failureRedirect: "/unauthorized",
-    });
-  } catch (error) {
-    if (!returnTo) throw error;
-    if (error instanceof Response && isRedirect(error)) {
-      error.headers.append(
-        "Set-Cookie",
-        await returnToCookie.serialize(returnTo)
-      );
-      return error;
-    }
-    throw error;
-  }
   return authenticator.authenticate("saml", request);
 }
+```
 
-function isRedirect(response: Response) {
-  if (response.status < 300 || response.status >= 400) return false;
-  return response.headers.has("Location");
+### `routes/auth.saml.callback.tsx`
+
+```ts
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { authenticator } from "~/services/auth.server";
+
+export let action: ActionFunction = ({ request }) => login(request);
+export let loader: LoaderFunction = ({ request }) => login(request);
+
+async function login(request: Request) {
+  let successRedirect = "/";
+
+  try {
+    // if relay state was set we can redirect to it.
+    const newRequest = request.clone();
+    const formData = await newRequest.formData();
+    const body = Object.fromEntries(formData);
+    successRedirect = (formData.get("RelayState") || "/").toString();
+  } catch (e) {}
+
+  // call authenticate to complete the login and set returnTo as the successRedirect
+  return authenticator.authenticate("saml", request, {
+    successRedirect,
+    failureRedirect: "/unauthenticated",
+  });
 }
 ```
 
@@ -130,8 +127,16 @@ import type { LoaderArgs } from "@remix-run/node";
 
 export async function loader({ request }: LoaderArgs) {
   // to redirect to login if not authed
+  // The current url can be passed passed to the ipd as a RelayState when
+  // a user accesses a protected page without being logged in.
+  // They will run through the saml process and then be redirected to
+  // the same page.
+
   let user = await authenticator.isAuthenticated(request, {
     failureRedirect: `/auth/saml/?returnTo=${encodeURI(request.url)}`,
+
+    // or to go back to the root `/`
+    //failureRedirect: "/auth/saml/",
   });
   return json({ user });
 }
