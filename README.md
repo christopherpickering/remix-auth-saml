@@ -57,10 +57,19 @@ import * as validator from "@authenio/samlify-node-xmllint";
 
 export let authenticator = new Authenticator<any>(sessionStorage);
 
-let samlStrategy = new SamlStrategy({ validator }, async ({ profile }) => {
-  console.log(profile);
-  return true;
-});
+let samlStrategy = new SamlStrategy(
+  { validator },
+  async ({ extract, data }) => {
+    console.log("profile", extract);
+    // data is the raw response from the idp
+    // this could be passed into a backend for decryption
+    // if you need to verify authentication in the backend.
+    // if remix is the backend, the you can use the
+    // extract directly
+    console.log("data", data);
+    return false;
+  }
+);
 
 export let metadata = samlStrategy.metadata();
 
