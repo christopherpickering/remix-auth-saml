@@ -18,11 +18,6 @@ import type { ServiceProvider } from "samlify/types/src/entity-sp";
 
 let debug = createDebug("SamlStrategy");
 
-type Profile = {
-  [key: string]: unknown;
-  [key: number]: unknown;
-};
-
 interface ValidatorContext {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validate?: (xml: string) => Promise<any>;
@@ -33,7 +28,10 @@ export interface SamlStrategyOptions {
 }
 
 export interface SamlStrategyVerifyParams {
-  profile: Profile;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extract: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
 }
 
 /**
@@ -41,14 +39,20 @@ export interface SamlStrategyVerifyParams {
  *
  * Application must specify a `verify` callback:
  *
- *   function({profile}) { ... }
+ *   function({profile, body}) { ... }
  *
  * Options:
  * - `validator` Validator installed following samlify's guide.
  *
  * @example
- * let samlStrategy = new SamlStrategy({ validator }, async ({ profile }) => {
- *   console.log(profile);
+ * let samlStrategy = new SamlStrategy({ validator }, async ({ extract, data}) => {
+ *   console.log("profile", extract);
+ *   // data is the raw response from the idp
+ *   // this could be passed into a backend for decryption
+ *   // if you need to verify authentication in the backend.
+ *   // if remix is the backend, the you can use the
+ *   // extract directly
+ *   console.log("data", data);
  *   return true;
  * });
  * // sp metadata is accessible.
@@ -75,6 +79,7 @@ export class SamlStrategy<User> extends Strategy<
     invariant(process.env.AUTH_URL, "AUTH_URL must be set.");
     this.callbackURL = process.env.AUTH_CALLBACK_URL;
     this.authURL = process.env.AUTH_URL;
+
     samlify.setSchemaValidator(options.validator);
 
     this.spData = {
@@ -99,23 +104,23 @@ export class SamlStrategy<User> extends Strategy<
       assertionConsumerService: [
         {
           Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-          Location: this.authURL + "/auth/saml/callback",
+          Location: this.callbackURL,
         },
         {
           Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-          Location: this.authURL + "/auth/saml/callback",
+          Location: this.callbackURL,
         },
       ],
-      singleLogoutService: [
-        {
-          Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-          Location: this.authURL + "/auth/slo",
-        },
-        {
-          Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-          Location: this.authURL + "/auth/slo",
-        },
-      ],
+      // singleLogoutService: [
+      //   {
+      //     Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+      //     Location: this.authURL + "/auth/slo",
+      //   },
+      //   {
+      //     Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+      //     Location: this.authURL + "/auth/slo",
+      //   },
+      // ],
       privateKey: process.env.SAML_PRIVATE_KEY
         ? fs.readFileSync(process.env.SAML_PRIVATE_KEY)
         : undefined,
@@ -157,24 +162,59 @@ export class SamlStrategy<User> extends Strategy<
     }
 
     debug("Callback from ipd");
-    const formData = await request.formData();
-    const body = Object.fromEntries(formData);
-    const idp = await this.getIdp();
-    const { extract } = await this.sp.parseLoginResponse(idp, "post", {
-      body,
-    });
-    if (!extract.nameID) {
-      debug("Failed to login.");
+    try {
+      const formData = await request.formData();
+      const body = Object.fromEntries(formData);
+      const idp = await this.getIdp();
+      const { extract } = await this.sp.parseLoginResponse(idp, "post", {
+        body,
+      });
+      if (!extract.nameID) {
+        debug("Failed to login.");
+        return await this.failure(
+          "Failed to login",
+          request,
+          sessionStorage,
+          options
+        );
+      }
+
+      user = await this.verify({
+        extract,
+        data: body,
+      });
+
+      debug("User authenticated");
+
+      return await this.success(user, request, sessionStorage, options);
+    } catch (error) {
+      debug("Failed to login user", error);
+      if (error instanceof Error) {
+        return await this.failure(
+          error.message,
+          request,
+          sessionStorage,
+          options,
+          error
+        );
+      }
+      if (typeof error === "string") {
+        return await this.failure(
+          error,
+          request,
+          sessionStorage,
+          options,
+          new Error(error)
+        );
+      }
       return await this.failure(
-        "Failed to login",
+        "Unknown error",
         request,
         sessionStorage,
-        options
+        options,
+        new Error(JSON.stringify(error, null, 2))
       );
     }
-
-    debug("User authenticated");
-    return await this.success(extract, request, sessionStorage, options);
   }
 
   private async getAuthorizationURL(request: Request) {
