@@ -17,30 +17,6 @@ Install the package.
 npm i remix-auth-saml
 ```
 
-Add environment variables.
-
-```env
-# your app url
-AUTH_URL=http://localhost:3000
-# callback url from the idp
-
-AUTH_CALLBACK_URL=http://localhost:3000/auth/saml/callback
-
-# your ipd metadata url
-SAML_IDP_METADAT=http:localhost:7000/metadata
-
-# remaining files are optional
-SAML_SP_AUTHNREQUESTSSIGNED=false
-SAML_SP_WANTASSERTIONSIGNED=false
-SAML_SP_WANTMESSAGESIGNED=false
-SAML_SP_WANTLOGOUTREQUESTSIGNED=false
-SAML_SP_WANTLOGOUTRESPONSESIGNED=false
-SAML_SP_ISASSERTIONENCRYPTED=false
-SAML_PRIVATE_KEY="./test/saml-idp/idp-private-key.pem"
-SAML_PRIVATE_KEY_PASS=""
-SAML_ENC_PRIVATE_KEY="./test/saml-idp/idp-private-key.pem"
-```
-
 ## Setup
 
 Install a validator as specified in the samlify readme https://github.com/tngan/samlify/tree/master
@@ -58,7 +34,24 @@ import * as validator from "@authenio/samlify-node-xmllint";
 export let authenticator = new Authenticator<any>(sessionStorage);
 
 let samlStrategy = new SamlStrategy(
-  { validator },
+  {
+    validator,
+    authURL: "http://localhost:3000",
+    callbackURL: "http://localhost:3000/auth/saml/callback",
+    idpMetadataURL: "http://localhost:7000/metadata",
+    spAuthnRequestSigned: false,
+    spWantAssertionSigned: false,
+    spWantMessageSigned: false,
+    spWantLogoutRequestSigned: false,
+    spWantLogoutResponseSigned: false,
+    spIsAssertionEncrypted: false,
+    // optional
+    privateKey: "./test/saml-idp/idp-private-key.pem",
+    // optional
+    privateKeyPass: "",
+    // optional
+    encPrivateKey: "./test/saml-idp/idp-private-key.pem",
+  },
   async ({ extract, data }) => {
     console.log("profile", extract);
     // data is the raw response from the idp

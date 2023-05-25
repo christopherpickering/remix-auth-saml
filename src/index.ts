@@ -6,7 +6,7 @@ import {
   StrategyVerifyCallback,
 } from "remix-auth";
 import createDebug from "debug";
-import invariant from "tiny-invariant";
+
 import fs from "fs";
 import * as samlify from "samlify";
 import type {
@@ -25,6 +25,18 @@ interface ValidatorContext {
 
 export interface SamlStrategyOptions {
   validator: ValidatorContext;
+  authURL: string;
+  callbackURL: string;
+  idpMetadataURL: string;
+  spAuthnRequestSigned: boolean;
+  spWantAssertionSigned: boolean;
+  spWantMessageSigned: boolean;
+  spWantLogoutRequestSigned: boolean;
+  spWantLogoutResponseSigned: boolean;
+  spIsAssertionEncrypted: boolean;
+  privateKey?: string;
+  privateKeyPass?: string;
+  encPrivateKey?: string;
 }
 
 export interface SamlStrategyVerifyParams {
@@ -43,9 +55,21 @@ export interface SamlStrategyVerifyParams {
  *
  * Options:
  * - `validator` Validator installed following samlify's guide.
+ * - `authURL` Websites base url.
+ * - `callbackURL` Authentication callback url.
+ * - `idpMetadataURL` URL for IDP Metadata xml file.
+ * - `spAuthnRequestSigned`
+ * - `spWantAssertionSigned`
+ * - `spWantMessageSigned`
+ * - `spWantLogoutRequestSigned`
+ * - `spWantLogoutResponseSigned`
+ * - `spIsAssertionEncrypted`
+ * - `privateKey` Optional path to private key.
+ * - `privateKeyPass` Optional private key password.
+ * - `encPrivateKey` Optional path to encrypted private key.
  *
  * @example
- * let samlStrategy = new SamlStrategy({ validator }, async ({ extract, data}) => {
+ * let samlStrategy = new SamlStrategy(options, async ({ extract, data}) => {
  *   console.log("profile", extract);
  *   // data is the raw response from the idp
  *   // this could be passed into a backend for decryption
@@ -70,37 +94,28 @@ export class SamlStrategy<User> extends Strategy<
   protected authURL: string;
   protected spData: ServiceProviderSettings;
   protected sp: ServiceProvider;
+  protected idpMetadataURL: string;
+  protected privateKey?: string;
+
   constructor(
     options: SamlStrategyOptions,
     verify: StrategyVerifyCallback<User, SamlStrategyVerifyParams>
   ) {
     super(verify);
-    invariant(process.env.AUTH_CALLBACK_URL, "AUTH_CALLBACK_URL must be set.");
-    invariant(process.env.AUTH_URL, "AUTH_URL must be set.");
-    this.callbackURL = process.env.AUTH_CALLBACK_URL;
-    this.authURL = process.env.AUTH_URL;
-
+    this.callbackURL = options.callbackURL;
+    this.authURL = options.authURL;
+    this.idpMetadataURL = options.idpMetadataURL;
+    this.privateKey = options.privateKey;
     samlify.setSchemaValidator(options.validator);
 
     this.spData = {
       entityID: this.authURL,
-      authnRequestsSigned:
-        (process.env.SAML_SP_AUTHNREQUESTSSIGNED || "").toLowerCase() ===
-        "true",
-      wantAssertionsSigned:
-        (process.env.SAML_SP_WANTASSERTIONSIGNED || "").toLowerCase() ===
-        "true",
-      wantMessageSigned:
-        (process.env.SAML_SP_WANTMESSAGESIGNED || "").toLowerCase() === "true",
-      wantLogoutResponseSigned:
-        (process.env.SAML_SP_WANTLOGOUTREQUESTSIGNED || "").toLowerCase() ===
-        "true",
-      wantLogoutRequestSigned:
-        (process.env.SAML_SP_WANTLOGOUTRESPONSESIGNED || "").toLowerCase() ===
-        "true",
-      isAssertionEncrypted:
-        (process.env.SAML_SP_ISASSERTIONENCRYPTED || "").toLowerCase() ===
-        "true",
+      authnRequestsSigned: options.spAuthnRequestSigned,
+      wantAssertionsSigned: options.spWantAssertionSigned,
+      wantMessageSigned: options.spWantMessageSigned,
+      wantLogoutResponseSigned: options.spWantLogoutRequestSigned,
+      wantLogoutRequestSigned: options.spWantLogoutRequestSigned,
+      isAssertionEncrypted: options.spIsAssertionEncrypted,
       assertionConsumerService: [
         {
           Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
@@ -121,12 +136,12 @@ export class SamlStrategy<User> extends Strategy<
       //     Location: this.authURL + "/auth/slo",
       //   },
       // ],
-      privateKey: process.env.SAML_PRIVATE_KEY
-        ? fs.readFileSync(process.env.SAML_PRIVATE_KEY)
+      privateKey: options.privateKey
+        ? fs.readFileSync(options.privateKey)
         : undefined,
-      privateKeyPass: process.env.SAML_PRIVATE_KEY_PASS || undefined,
-      encPrivateKey: process.env.SAML_ENC_PRIVATE_KEY
-        ? fs.readFileSync(process.env.SAML_ENC_PRIVATE_KEY)
+      privateKeyPass: options.privateKeyPass,
+      encPrivateKey: options.encPrivateKey
+        ? fs.readFileSync(options.encPrivateKey)
         : undefined,
     };
     this.sp = samlify.ServiceProvider(this.spData);
@@ -259,16 +274,14 @@ export class SamlStrategy<User> extends Strategy<
   }
 
   private async getIdp() {
-    invariant(process.env.SAML_IDP_METADATA, "SAML_IDP_METADATA must be set");
-    const IpdXmlFetch = await fetch(process.env.SAML_IDP_METADATA);
+    const IpdXmlFetch = await fetch(this.idpMetadataURL);
     const Idpxml = await IpdXmlFetch.text();
 
     const idpData: IdentityProviderSettings = {
       metadata: Idpxml,
     };
 
-    if (process.env.SAML_PRIVATE_KEY)
-      idpData.privateKey = fs.readFileSync(process.env.SAML_PRIVATE_KEY);
+    if (this.privateKey) idpData.privateKey = fs.readFileSync(this.privateKey);
 
     return samlify.IdentityProvider(idpData);
   }
