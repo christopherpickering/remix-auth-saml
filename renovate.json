@@ -12,7 +12,7 @@
   "ignoreDeps": ["chart.js"],
   "baseBranches": ["dev"],
   "bumpVersion": "patch",
-  "commitMessagePrefix": "chore(deps)",
+  "commitMessagePrefix": "fix(deps)",
   "labels": ["maintenance", "renovate"],
   "packageRules": [
     {
