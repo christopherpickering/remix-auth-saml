@@ -51,6 +51,12 @@ let samlStrategy = new SamlStrategy(
     privateKeyPass: "",
     // optional
     encPrivateKey: "./test/saml-idp/idp-private-key.pem",
+    // optional
+    privateKey: "./test/saml-idp/idp-private-key.pem",
+    // optional
+    signingCert: "./test/saml-idp/idp-private-key.crt",
+    // optional
+    encryptCert: "./test/saml-idp/idp-private-key.crt",
   },
   async ({ extract, data }) => {
     console.log("profile", extract);
