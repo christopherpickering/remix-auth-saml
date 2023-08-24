@@ -1,7 +1,7 @@
 {
   "name": "remix-auth-saml",
   "description": "A SamlStrategy for Remix Auth.",
-  "version": "1.1.12",
+  "version": "1.2.0",
   "homepage": "https://github.com/christopherpickering/remix-auth-saml",
   "repository": {
     "type": "git",
