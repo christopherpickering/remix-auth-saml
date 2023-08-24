@@ -37,6 +37,8 @@ export interface SamlStrategyOptions {
   privateKey?: string;
   privateKeyPass?: string;
   encPrivateKey?: string;
+  signingCert?: string;
+  encryptCert?: string;
 }
 
 export interface SamlStrategyVerifyParams {
@@ -142,6 +144,12 @@ export class SamlStrategy<User> extends Strategy<
       privateKeyPass: options.privateKeyPass,
       encPrivateKey: options.encPrivateKey
         ? fs.readFileSync(options.encPrivateKey)
+        : undefined,
+      signingCert: options.signingCert
+        ? fs.readFileSync(options.signingCert)
+        : undefined,
+      encryptCert: options.encryptCert
+        ? fs.readFileSync(options.encryptCert)
         : undefined,
     };
     this.sp = samlify.ServiceProvider(this.spData);
