@@ -101,7 +101,7 @@ export class SamlStrategy<User> extends Strategy<
 
   constructor(
     options: SamlStrategyOptions,
-    verify: StrategyVerifyCallback<User, SamlStrategyVerifyParams>
+    verify: StrategyVerifyCallback<User, SamlStrategyVerifyParams>,
   ) {
     super(verify);
     this.callbackURL = options.callbackURL;
@@ -158,11 +158,11 @@ export class SamlStrategy<User> extends Strategy<
   async authenticate(
     request: Request,
     sessionStorage: SessionStorage,
-    options: AuthenticateOptions
+    options: AuthenticateOptions,
   ): Promise<User> {
     let url = new URL(request.url);
     let session = await sessionStorage.getSession(
-      request.headers.get("Cookie")
+      request.headers.get("Cookie"),
     );
 
     let user: User | null = session.get(options.sessionKey) ?? null;
@@ -198,7 +198,7 @@ export class SamlStrategy<User> extends Strategy<
           "Failed to login",
           request,
           sessionStorage,
-          options
+          options,
         );
       }
 
@@ -214,7 +214,7 @@ export class SamlStrategy<User> extends Strategy<
           request,
           sessionStorage,
           options,
-          error
+          error,
         );
       }
       if (typeof error === "string") {
@@ -223,7 +223,7 @@ export class SamlStrategy<User> extends Strategy<
           request,
           sessionStorage,
           options,
-          new Error(error)
+          new Error(error),
         );
       }
       return await this.failure(
@@ -231,7 +231,7 @@ export class SamlStrategy<User> extends Strategy<
         request,
         sessionStorage,
         options,
-        new Error(JSON.stringify(error, null, 2))
+        new Error(JSON.stringify(error, null, 2)),
       );
     }
 
@@ -245,11 +245,11 @@ export class SamlStrategy<User> extends Strategy<
     const { context } = this.sp.createLoginRequest(idp, "redirect");
 
     let params = new URLSearchParams(
-      this.authorizationParams(new URL(context).searchParams)
+      this.authorizationParams(new URL(context).searchParams),
     );
 
     let requestParams = new URLSearchParams(
-      this.authorizationParams(new URL(request.url).searchParams)
+      this.authorizationParams(new URL(request.url).searchParams),
     );
 
     params.set(
@@ -257,7 +257,7 @@ export class SamlStrategy<User> extends Strategy<
       requestParams.get("returnTo") ||
         requestParams.get("relayState") ||
         requestParams.get("redirect_url") ||
-        this.getCallbackURL(new URL(request.url)).toString()
+        this.getCallbackURL(new URL(request.url)).toString(),
     );
 
     let url = new URL(context);
