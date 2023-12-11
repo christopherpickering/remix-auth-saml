@@ -67,7 +67,7 @@ let samlStrategy = new SamlStrategy(
     // extract directly
     console.log("data", data);
     return false;
-  }
+  },
 );
 
 export let metadata = samlStrategy.metadata();
