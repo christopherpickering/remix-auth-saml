@@ -1,7 +1,7 @@
 {
   "name": "remix-auth-saml",
   "description": "A SamlStrategy for Remix Auth.",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "homepage": "https://github.com/christopherpickering/remix-auth-saml",
   "repository": {
     "type": "git",
@@ -51,8 +51,8 @@
     "@semantic-release/npm": "^11.0.0",
     "@types/debug": "^4.1.7",
     "@types/jest": "^29.5.1",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "babel-jest": "^29.5.0",
     "cz-conventional-changelog": "3.3.0",
     "eslint": "^8.40.0",
