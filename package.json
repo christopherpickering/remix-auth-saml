@@ -1,7 +1,7 @@
 {
   "name": "remix-auth-saml",
   "description": "A SamlStrategy for Remix Auth.",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "homepage": "https://github.com/christopherpickering/remix-auth-saml",
   "repository": {
     "type": "git",
@@ -66,7 +66,7 @@
     "lint-staged": "^15.0.0",
     "prettier": "^3.0.0",
     "react": "^18.2.0",
-    "semantic-release": "23.0.5",
+    "semantic-release": "23.0.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.4"
   },
