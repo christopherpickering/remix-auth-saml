@@ -5,9 +5,7 @@ import {
   Strategy,
   StrategyVerifyCallback,
 } from "remix-auth";
-import createDebug from "debug";
 
-import fs from "fs";
 import * as samlify from "samlify";
 import type {
   IdentityProviderSettings,
@@ -16,11 +14,11 @@ import type {
 
 import type { ServiceProvider } from "samlify/types/src/entity-sp";
 
-let debug = createDebug("SamlStrategy");
+/** PEM contents or a Node filesystem path (path support is Node-only). */
+export type PemOrPath = string | Buffer;
 
 interface ValidatorContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  validate?: (xml: string) => Promise<any>;
+  validate?: (xml: string) => Promise<unknown>;
 }
 
 export interface SamlStrategyOptions {
@@ -34,18 +32,28 @@ export interface SamlStrategyOptions {
   spWantLogoutRequestSigned: boolean;
   spWantLogoutResponseSigned: boolean;
   spIsAssertionEncrypted: boolean;
-  privateKey?: string;
+  privateKey?: PemOrPath;
   privateKeyPass?: string;
-  encPrivateKey?: string;
-  signingCert?: string;
-  encryptCert?: string;
+  encPrivateKey?: PemOrPath;
+  signingCert?: PemOrPath;
+  encryptCert?: PemOrPath;
 }
 
 export interface SamlStrategyVerifyParams {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extract: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
+  extract: { nameID?: string; [key: string]: unknown };
+  data: Record<string, FormDataEntryValue>;
+}
+
+function resolvePem(value?: PemOrPath): string | Buffer | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") return value;
+  if (/-----BEGIN /.test(value)) return value;
+
+  // Back-compat: treat plain strings as filesystem paths (Node only).
+  // Dynamic require keeps Cloudflare/edge bundles from pulling in `fs`
+  // when callers pass PEM contents or Buffers instead.
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  return readFileSync(value);
 }
 
 /**
@@ -60,15 +68,7 @@ export interface SamlStrategyVerifyParams {
  * - `authURL` Websites base url.
  * - `callbackURL` Authentication callback url.
  * - `idpMetadataURL` URL for IDP Metadata xml file.
- * - `spAuthnRequestSigned`
- * - `spWantAssertionSigned`
- * - `spWantMessageSigned`
- * - `spWantLogoutRequestSigned`
- * - `spWantLogoutResponseSigned`
- * - `spIsAssertionEncrypted`
- * - `privateKey` Optional path to private key.
- * - `privateKeyPass` Optional private key password.
- * - `encPrivateKey` Optional path to encrypted private key.
+ * - Key/cert options accept PEM string, Buffer, or (Node only) a file path.
  *
  * @example
  * let samlStrategy = new SamlStrategy(options, async ({ extract, data}) => {
@@ -97,7 +97,7 @@ export class SamlStrategy<User> extends Strategy<
   protected spData: ServiceProviderSettings;
   protected sp: ServiceProvider;
   protected idpMetadataURL: string;
-  protected privateKey?: string;
+  protected privateKey?: PemOrPath;
 
   constructor(
     options: SamlStrategyOptions,
@@ -128,29 +128,11 @@ export class SamlStrategy<User> extends Strategy<
           Location: this.callbackURL,
         },
       ],
-      // singleLogoutService: [
-      //   {
-      //     Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-      //     Location: this.authURL + "/auth/slo",
-      //   },
-      //   {
-      //     Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-      //     Location: this.authURL + "/auth/slo",
-      //   },
-      // ],
-      privateKey: options.privateKey
-        ? fs.readFileSync(options.privateKey)
-        : undefined,
+      privateKey: resolvePem(options.privateKey),
       privateKeyPass: options.privateKeyPass,
-      encPrivateKey: options.encPrivateKey
-        ? fs.readFileSync(options.encPrivateKey)
-        : undefined,
-      signingCert: options.signingCert
-        ? fs.readFileSync(options.signingCert)
-        : undefined,
-      encryptCert: options.encryptCert
-        ? fs.readFileSync(options.encryptCert)
-        : undefined,
+      encPrivateKey: resolvePem(options.encPrivateKey),
+      signingCert: resolvePem(options.signingCert),
+      encryptCert: resolvePem(options.encryptCert),
     };
     this.sp = samlify.ServiceProvider(this.spData);
   }
@@ -167,24 +149,19 @@ export class SamlStrategy<User> extends Strategy<
 
     let user: User | null = session.get(options.sessionKey) ?? null;
 
-    // User is already authenticated
     if (user) {
-      debug("User is authenticated");
       return this.success(user, request, sessionStorage, options);
     }
 
     let callbackURL = this.getCallbackURL(url);
-    debug("Callback URL", callbackURL);
 
     if (url.pathname !== callbackURL.pathname) {
-      debug("Redirecting to ipd login URL");
       const authURL = await this.getAuthorizationURL(request);
       throw redirect(authURL.toString(), {
         headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
       });
     }
 
-    debug("Callback from ipd");
     try {
       const formData = await request.formData();
       const body = Object.fromEntries(formData);
@@ -193,7 +170,6 @@ export class SamlStrategy<User> extends Strategy<
         body,
       });
       if (!extract.nameID) {
-        debug("Failed to login.");
         return await this.failure(
           "Failed to login",
           request,
@@ -207,7 +183,6 @@ export class SamlStrategy<User> extends Strategy<
         data: body,
       });
     } catch (error) {
-      debug("Failed to login user", error);
       if (error instanceof Error) {
         return await this.failure(
           error.message,
@@ -234,8 +209,6 @@ export class SamlStrategy<User> extends Strategy<
         new Error(JSON.stringify(error, null, 2)),
       );
     }
-
-    debug("User authenticated");
 
     return await this.success(user, request, sessionStorage, options);
   }
@@ -264,6 +237,7 @@ export class SamlStrategy<User> extends Strategy<
     url.search = params.toString();
     return url;
   }
+
   protected authorizationParams(params: URLSearchParams): URLSearchParams {
     return new URLSearchParams(params);
   }
@@ -289,7 +263,8 @@ export class SamlStrategy<User> extends Strategy<
       metadata: Idpxml,
     };
 
-    if (this.privateKey) idpData.privateKey = fs.readFileSync(this.privateKey);
+    const privateKey = resolvePem(this.privateKey);
+    if (privateKey) idpData.privateKey = privateKey;
 
     return samlify.IdentityProvider(idpData);
   }

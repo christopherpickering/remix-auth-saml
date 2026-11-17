@@ -1,25 +1,27 @@
-# Remix Auth Saml Strategy Template
+# Remix Auth Saml Strategy
 
-Use this strategy to add SAML single sign on to your remix site.
+SAML single sign-on strategy for [Remix Auth](https://github.com/sergiodxa/remix-auth), powered by [samlify](https://github.com/tngan/samlify).
 
 ## Supported runtimes
 
 | Runtime    | Has Support |
 | ---------- | ----------- |
 | Node.js    | ✅          |
-| Cloudflare | ✅          |
+| Cloudflare | ✅\*        |
+
+\*Pass PEM contents or `Buffer`s for keys/certs. File paths only work on Node.
 
 ## Install
-
-Install the package.
 
 ```bash
 npm i remix-auth-saml
 ```
 
+Also install peer deps if needed: `remix-auth`, `@remix-run/server-runtime`.
+
 ## Setup
 
-Install a validator as specified in the samlify readme https://github.com/tngan/samlify/tree/master
+Install a validator as specified in the [samlify readme](https://github.com/tngan/samlify/tree/master).
 
 ### `services/auth.server.ts`
 
@@ -27,11 +29,10 @@ Install a validator as specified in the samlify readme https://github.com/tngan/
 import { Authenticator } from "remix-auth";
 import { sessionStorage } from "~/services/session.server";
 import { SamlStrategy } from "remix-auth-saml";
-
-// install and import an xml validator as directed here: https://github.com/tngan/samlify/tree/master
 import * as validator from "@authenio/samlify-node-xmllint";
+// Node: import { readFileSync } from "node:fs";
 
-export let authenticator = new Authenticator<any>(sessionStorage);
+export let authenticator = new Authenticator(sessionStorage);
 
 let samlStrategy = new SamlStrategy(
   {
@@ -45,28 +46,14 @@ let samlStrategy = new SamlStrategy(
     spWantLogoutRequestSigned: false,
     spWantLogoutResponseSigned: false,
     spIsAssertionEncrypted: false,
-    // optional
-    privateKey: "./test/saml-idp/idp-private-key.pem",
-    // optional
-    privateKeyPass: "",
-    // optional
-    encPrivateKey: "./test/saml-idp/idp-private-key.pem",
-    // optional
-    privateKey: "./test/saml-idp/idp-private-key.pem",
-    // optional
-    signingCert: "./test/saml-idp/idp-private-key.crt",
-    // optional
-    encryptCert: "./test/saml-idp/idp-private-key.crt",
+    // Prefer PEM string / Buffer (required on Cloudflare):
+    // privateKey: process.env.SAML_PRIVATE_KEY,
+    // Or a Node filesystem path (still supported):
+    // privateKey: "./certs/sp-private-key.pem",
   },
   async ({ extract, data }) => {
-    console.log("profile", extract);
-    // data is the raw response from the idp
-    // this could be passed into a backend for decryption
-    // if you need to verify authentication in the backend.
-    // if remix is the backend, the you can use the
-    // extract directly
-    console.log("data", data);
-    return false;
+    // `extract` is the parsed assertion; `data` is the raw IdP POST body
+    return { id: extract.nameID };
   },
 );
 
@@ -102,14 +89,10 @@ async function login(request: Request) {
   let successRedirect = "/";
 
   try {
-    // if relay state was set we can redirect to it.
-    const newRequest = request.clone();
-    const formData = await newRequest.formData();
-    const body = Object.fromEntries(formData);
+    const formData = await request.clone().formData();
     successRedirect = (formData.get("RelayState") || "/").toString();
-  } catch (e) {}
+  } catch {}
 
-  // call authenticate to complete the login and set returnTo as the successRedirect
   return authenticator.authenticate("saml", request, {
     successRedirect,
     failureRedirect: "/unauthenticated",
@@ -125,29 +108,14 @@ import { json } from "@remix-run/node";
 import type { LoaderArgs } from "@remix-run/node";
 
 export async function loader({ request }: LoaderArgs) {
-  // to redirect to login if not authed
-  // The current url can be passed passed to the ipd as a RelayState when
-  // a user accesses a protected page without being logged in.
-  // They will run through the saml process and then be redirected to
-  // the same page.
-
   let user = await authenticator.isAuthenticated(request, {
     failureRedirect: `/auth/saml/?returnTo=${encodeURI(request.url)}`,
-
-    // or to go back to the root `/`
-    //failureRedirect: "/auth/saml/",
   });
   return json({ user });
-}
-
-export default function Login() {
-  return <>protected page!</>;
 }
 ```
 
 ### Access SP Metadata `routes/metadata[.]xml.tsx`
-
-You may need access to the `sp` metadata to keep in sync with your `ipd` automatically.
 
 ```ts
 import { metadata } from "~/services/auth.server";

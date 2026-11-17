@@ -2,10 +2,12 @@
 
 ## Setup
 
-Run `npm install` to install the dependencies.
+```bash
+npm install
+```
 
-Run the tests with `npm run test`.
-
-Run the linter with `npm run lint`.
-
-Run the typechecker with `npm run typecheck`.
+```bash
+npm test
+npm run typecheck
+npm run build
+```

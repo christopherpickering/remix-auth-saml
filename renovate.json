@@ -1,39 +1,23 @@
 {
-  "extends": [
-    "config:base",
-    "group:allNonMajor",
-    ":separateMultipleMajorReleases",
-    ":ignoreUnstable",
-    ":enableVulnerabilityAlertsWithLabel(security)",
-    ":rebaseStalePrs",
-    ":npm",
-    "npm:unpublishSafe"
-  ],
-  "ignoreDeps": ["chart.js"],
-  "baseBranches": ["dev"],
-  "bumpVersion": "patch",
-  "commitMessagePrefix": "fix(deps)",
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 10am on the first day of the month"],
+  "timezone": "America/Chicago",
   "labels": ["maintenance", "renovate"],
+  "rangeStrategy": "bump",
   "packageRules": [
     {
-      "matchUpdateTypes": ["pin", "digest", "minor", "patch"],
-      "automerge": true
-    },
-    {
       "matchDepTypes": ["devDependencies"],
+      "groupName": "devDependencies",
       "automerge": true
     },
     {
-      "extends": "packages:linters",
-      "groupName": "linters",
-      "automerge": true
+      "matchPackageNames": ["samlify"],
+      "groupName": "runtime"
     },
     {
-      "extends": "packages:test",
-      "groupName": "test packages",
-      "automerge": true
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     }
-  ],
-  "schedule": ["before 10pm on Sunday"],
-  "timezone": "America/Chicago"
+  ]
 }

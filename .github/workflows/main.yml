@@ -1,79 +1,25 @@
 name: CI
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
-  build:
-    name: Build
+  check:
+    name: Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
+          cache: npm
 
-      - name: Install dependencies
-        uses: bahmutov/npm-install@v1
+      - run: npm ci
 
-      - name: Build
-        run: npm run build
+      - run: npm run typecheck
 
-  typecheck:
-    name: Typechecker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - run: npm test
 
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-
-      - name: Install dependencies
-        uses: bahmutov/npm-install@v1
-
-      - name: Typecheck
-        run: npm run typecheck
-
-  test:
-    name: Unit and Integration Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-
-      - name: Install dependencies
-        uses: bahmutov/npm-install@v1
-
-      - name: Test
-        run: npm run test -- --ci --coverage --maxWorkers=2
-
-  lint:
-    name: Linter
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-
-      - name: Install dependencies
-        uses: bahmutov/npm-install@v1
-
-      - name: Build
-        run: npm run build
-
-      - name: Lint
-        run: npm run lint
+      - run: npm run build
