@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "tsx --test test/**/*.test.ts",
+    "test": "tsx --test test/",
     "format": "prettier --write ."
   },
   "keywords": [
