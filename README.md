@@ -34,7 +34,7 @@ import * as validator from "@authenio/samlify-node-xmllint";
 
 export let authenticator = new Authenticator(sessionStorage);
 
-let samlStrategy = new SamlStrategy(
+export let samlStrategy = new SamlStrategy(
   {
     validator,
     authURL: "http://localhost:3000",
@@ -117,6 +117,84 @@ export async function loader({ request }: LoaderArgs) {
   return json({ user });
 }
 ```
+
+### Single Logout (SLO)
+
+Single Logout is opt-in. Both IdP-initiated (the IdP tells your app to log a
+user out) and SP-initiated (your app starts the logout) flows are supported,
+over the HTTP-Redirect and HTTP-POST bindings.
+
+Because every app stores sessions differently, you provide an `onLogout`
+callback that destroys the user's session. Add `logoutURL` and `onLogout` to
+the strategy options in `services/auth.server.ts`:
+
+```ts
+let samlStrategy = new SamlStrategy(
+  {
+    // ...existing options
+    logoutURL: "http://localhost:3000/auth/saml/logout", // advertised in SP metadata
+    // Strongly recommended: reject unsigned logout requests, which anyone
+    // could otherwise forge to log your users out.
+    spWantLogoutRequestSigned: true,
+    // IdP-initiated logout: destroy the user's session. `request` carries the
+    // browser's cookies, so you can find the session from it.
+    onLogout: async ({ nameID, sessionIndex, request }) => {
+      let session = await sessionStorage.getSession(
+        request.headers.get("Cookie"),
+      );
+      return {
+        headers: { "Set-Cookie": await sessionStorage.destroySession(session) },
+      };
+    },
+  },
+  verify,
+);
+```
+
+Register the logout URL with your IdP (it is included in the SP metadata) and
+add a route that hands IdP messages to the strategy. This one route handles
+both the IdP's LogoutRequests and the LogoutResponses to logouts you start:
+
+```ts
+// routes/auth.saml.logout.tsx
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { samlStrategy } from "~/services/auth.server";
+
+export let loader: LoaderFunction = ({ request }) =>
+  samlStrategy.handleLogout(request, { redirectTo: "/" });
+export let action: ActionFunction = ({ request }) =>
+  samlStrategy.handleLogout(request, { redirectTo: "/" });
+```
+
+To start a logout from your app (SP-initiated), keep the login `nameID` and
+`sessionIndex` in the user you return from `verify`
+(`extract.nameID`, `extract.sessionIndex?.sessionIndex`), then redirect to the
+IdP while destroying the local session:
+
+```ts
+// routes/logout.tsx
+import { redirect } from "@remix-run/node";
+import { samlStrategy } from "~/services/auth.server";
+import { sessionStorage } from "~/services/session.server";
+
+export async function action({ request }) {
+  let session = await sessionStorage.getSession(request.headers.get("Cookie"));
+  let user = session.get("user");
+  return redirect(
+    await samlStrategy.getLogoutURL({
+      nameID: user.nameID,
+      sessionIndex: user.sessionIndex,
+    }),
+    { headers: { "Set-Cookie": await sessionStorage.destroySession(session) } },
+  );
+}
+```
+
+`handleLogout` verifies the message (including its signature when
+`spWantLogoutRequestSigned` / `spWantLogoutResponseSigned` is set) and returns a
+`Response`: a redirect or auto-submitting form back to the IdP for an
+IdP-initiated logout, and a redirect to a same-origin `RelayState` (or
+`redirectTo`) when your own logout completes. Invalid messages get a `400`.
 
 ### Access SP Metadata `routes/metadata[.]xml.tsx`
 
