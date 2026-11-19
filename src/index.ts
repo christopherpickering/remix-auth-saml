@@ -44,16 +44,73 @@ export interface SamlStrategyVerifyParams {
   data: Record<string, FormDataEntryValue>;
 }
 
-function resolvePem(value?: PemOrPath): string | Buffer | undefined {
+function loadFs(): typeof import("node:fs") {
+  // Loaded lazily so Cloudflare/edge bundles don't pull in `fs` when callers
+  // pass PEM contents or Buffers instead of file paths.
+  if (typeof require === "function") {
+    return require("node:fs") as typeof import("node:fs");
+  }
+  const getBuiltin = (
+    process as unknown as {
+      getBuiltinModule?: (id: string) => unknown;
+    }
+  ).getBuiltinModule;
+  const fs = getBuiltin?.("node:fs") as typeof import("node:fs") | undefined;
+  if (!fs) {
+    throw new Error(
+      "Filesystem access is unavailable in this runtime; pass PEM contents (string or Buffer) instead of a file path.",
+    );
+  }
+  return fs;
+}
+
+function wrapPem(base64: string, label: string): string {
+  const body = base64.replace(/\s+/g, "");
+  const lines = body.match(/.{1,64}/g) ?? [];
+  return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+}
+
+/**
+ * Resolves a key/cert option to something samlify accepts.
+ *
+ * Accepted inputs, in order:
+ * 1. `Buffer` - used as-is.
+ * 2. PEM string (contains `-----BEGIN `) - used as-is. Literal `\n` sequences
+ *    (common in env vars / secret stores) are converted to real newlines.
+ * 3. Bare base64 certificate body (`kind: "cert"` only) - wrapped as PEM.
+ * 4. Anything else - treated as a filesystem path (Node only).
+ */
+export function resolvePem(
+  value?: PemOrPath,
+  kind: "cert" | "key" = "key",
+): string | Buffer | undefined {
   if (value == null) return undefined;
   if (typeof value !== "string") return value;
-  if (/-----BEGIN /.test(value)) return value;
+
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+
+  if (/-----BEGIN /.test(trimmed)) {
+    return trimmed.includes("\\n") && !trimmed.includes("\n")
+      ? trimmed.replace(/\\n/g, "\n")
+      : trimmed;
+  }
+
+  if (kind === "cert" && /^[A-Za-z0-9+/=\s]{64,}$/.test(trimmed)) {
+    return wrapPem(trimmed, "CERTIFICATE");
+  }
 
   // Back-compat: treat plain strings as filesystem paths (Node only).
-  // Dynamic require keeps Cloudflare/edge bundles from pulling in `fs`
-  // when callers pass PEM contents or Buffers instead.
-  const { readFileSync } = require("node:fs") as typeof import("node:fs");
-  return readFileSync(value);
+  try {
+    return loadFs().readFileSync(trimmed);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      throw new Error(
+        `Could not read key/certificate file "${trimmed}". Pass PEM contents (string or Buffer) or a valid file path.`,
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -97,7 +154,7 @@ export class SamlStrategy<User> extends Strategy<
   protected spData: ServiceProviderSettings;
   protected sp: ServiceProvider;
   protected idpMetadataURL: string;
-  protected privateKey?: PemOrPath;
+  protected privateKey?: string | Buffer;
 
   constructor(
     options: SamlStrategyOptions,
@@ -107,7 +164,8 @@ export class SamlStrategy<User> extends Strategy<
     this.callbackURL = options.callbackURL;
     this.authURL = options.authURL;
     this.idpMetadataURL = options.idpMetadataURL;
-    this.privateKey = options.privateKey;
+    // Resolve once so file paths aren't re-read on every request.
+    this.privateKey = resolvePem(options.privateKey, "key");
     samlify.setSchemaValidator(options.validator);
 
     this.spData = {
@@ -115,7 +173,7 @@ export class SamlStrategy<User> extends Strategy<
       authnRequestsSigned: options.spAuthnRequestSigned,
       wantAssertionsSigned: options.spWantAssertionSigned,
       wantMessageSigned: options.spWantMessageSigned,
-      wantLogoutResponseSigned: options.spWantLogoutRequestSigned,
+      wantLogoutResponseSigned: options.spWantLogoutResponseSigned,
       wantLogoutRequestSigned: options.spWantLogoutRequestSigned,
       isAssertionEncrypted: options.spIsAssertionEncrypted,
       assertionConsumerService: [
@@ -128,11 +186,11 @@ export class SamlStrategy<User> extends Strategy<
           Location: this.callbackURL,
         },
       ],
-      privateKey: resolvePem(options.privateKey),
+      privateKey: this.privateKey,
       privateKeyPass: options.privateKeyPass,
-      encPrivateKey: resolvePem(options.encPrivateKey),
-      signingCert: resolvePem(options.signingCert),
-      encryptCert: resolvePem(options.encryptCert),
+      encPrivateKey: resolvePem(options.encPrivateKey, "key"),
+      signingCert: resolvePem(options.signingCert, "cert"),
+      encryptCert: resolvePem(options.encryptCert, "cert"),
     };
     this.sp = samlify.ServiceProvider(this.spData);
   }
@@ -263,8 +321,7 @@ export class SamlStrategy<User> extends Strategy<
       metadata: Idpxml,
     };
 
-    const privateKey = resolvePem(this.privateKey);
-    if (privateKey) idpData.privateKey = privateKey;
+    if (this.privateKey) idpData.privateKey = this.privateKey;
 
     return samlify.IdentityProvider(idpData);
   }

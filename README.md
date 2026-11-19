@@ -46,8 +46,11 @@ let samlStrategy = new SamlStrategy(
     spWantLogoutRequestSigned: false,
     spWantLogoutResponseSigned: false,
     spIsAssertionEncrypted: false,
-    // Prefer PEM string / Buffer (required on Cloudflare):
+    // Prefer PEM string / Buffer (required on Cloudflare, works with
+    // Secrets Manager / env vars; literal "\n" sequences are supported and
+    // bare base64 cert bodies are accepted for signingCert/encryptCert):
     // privateKey: process.env.SAML_PRIVATE_KEY,
+    // signingCert: await getSecret("saml-signing-cert"),
     // Or a Node filesystem path (still supported):
     // privateKey: "./certs/sp-private-key.pem",
   },
